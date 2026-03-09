@@ -187,6 +187,69 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Account Age Filter Card -->
+            <div class="config-card">
+                <div class="config-card-header">
+                    <div class="config-icon" style="background: linear-gradient(135deg, #5865F2 0%, #4752C4 100%);">
+                        <i class="fas fa-user-clock"></i>
+                    </div>
+                    <div>
+                        <h2>Account Age Filter</h2>
+                        <p class="config-description">Block new accounts during raids</p>
+                    </div>
+                </div>
+                <div class="config-card-body">
+                    <div class="config-toggle">
+                        <label class="toggle-label">
+                            <span>Enable Account Age Filter</span>
+                            <label class="switch">
+                                <input type="checkbox" id="account-age-enabled" {% if config.account_age.enabled %}checked{% endif %}>
+                                <span class="slider"></span>
+                            </label>
+                        </label>
+                    </div>
+                    <div class="config-input-group">
+                        <label class="input-label">
+                            <i class="fas fa-calendar"></i>
+                            Minimum Account Age (days)
+                        </label>
+                        <input type="number" id="account-age-days" value="{{ config.account_age.min_days }}" min="1" max="365" class="config-input">
+                        <span class="input-hint">Accounts younger than this will be kicked during raids</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Emergency Lockdown Card -->
+            <div class="config-card">
+                <div class="config-card-header">
+                    <div class="config-icon" style="background: linear-gradient(135deg, #ED4245 0%, #C03537 100%);">
+                        <i class="fas fa-lock"></i>
+                    </div>
+                    <div>
+                        <h2>Emergency Lockdown</h2>
+                        <p class="config-description">Instant server protection</p>
+                    </div>
+                </div>
+                <div class="config-card-body">
+                    <div class="config-toggle">
+                        <label class="toggle-label">
+                            <span>Lockdown Status</span>
+                            <label class="switch">
+                                <input type="checkbox" id="lockdown-enabled" {% if config.lockdown.enabled %}checked{% endif %} disabled>
+                                <span class="slider"></span>
+                            </label>
+                        </label>
+                    </div>
+                    <div class="config-input-group">
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">
+                            <i class="fas fa-info-circle"></i>
+                            Use <code>/lockdown</code> command in Discord to activate emergency lockdown.
+                            This will lock all channels instantly.
+                        </p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="save-section">

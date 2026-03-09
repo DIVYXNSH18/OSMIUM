@@ -15,6 +15,10 @@ async function saveConfig() {
             max_actions: parseInt(document.getElementById('nuke-max-actions').value),
             time_window: parseInt(document.getElementById('nuke-time-window').value)
         },
+        account_age: {
+            enabled: document.getElementById('account-age-enabled').checked,
+            min_days: parseInt(document.getElementById('account-age-days').value)
+        },
         log_channel: document.getElementById('log-channel').value || null
     };
 

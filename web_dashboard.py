@@ -139,6 +139,8 @@ def get_guild_config(guild_id):
         'anti_spam': {'enabled': True, 'max_messages': 5, 'time_window': 5},
         'anti_raid': {'enabled': True, 'max_joins': 10, 'time_window': 10},
         'anti_nuke': {'enabled': True, 'max_actions': 3, 'time_window': 10},
+        'account_age': {'enabled': True, 'min_days': 7},
+        'lockdown': {'enabled': False},
         'log_channel': None,
         'whitelist': []
     }
