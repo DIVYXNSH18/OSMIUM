@@ -240,6 +240,53 @@ async def status(interaction: discord.Interaction):
     embed.add_field(name="Features", value="✅ Anti-Spam\n✅ Anti-Raid\n✅ Anti-Nuke\n✅ Moderation", inline=False)
     await interaction.response.send_message(embed=embed)
 
+@bot.tree.command(name="logging", description="Setup logging channels")
+async def logging(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ You need Administrator permission!", ephemeral=True)
+        return
+    
+    await interaction.response.defer()
+    
+    try:
+        guild = interaction.guild
+        
+        # Create category for logs
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True)
+        }
+        
+        # Add permission for administrators
+        for role in guild.roles:
+            if role.permissions.administrator:
+                overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=False)
+        
+        category = await guild.create_category("📊 Security Logs", overwrites=overwrites)
+        
+        # Create log channels
+        mod_logs = await guild.create_text_channel("mod-logs", category=category, topic="Moderation actions log")
+        join_logs = await guild.create_text_channel("join-logs", category=category, topic="Member join/leave log")
+        message_logs = await guild.create_text_channel("message-logs", category=category, topic="Deleted/edited messages log")
+        security_logs = await guild.create_text_channel("security-logs", category=category, topic="Anti-spam/raid/nuke alerts")
+        
+        embed = discord.Embed(
+            title="✅ Logging Channels Created",
+            description="Security logging channels have been set up!",
+            color=0xE89A7C
+        )
+        embed.add_field(name="📋 Mod Logs", value=mod_logs.mention, inline=True)
+        embed.add_field(name="👋 Join Logs", value=join_logs.mention, inline=True)
+        embed.add_field(name="💬 Message Logs", value=message_logs.mention, inline=True)
+        embed.add_field(name="🛡️ Security Logs", value=security_logs.mention, inline=True)
+        embed.set_footer(text="Only administrators can view these channels")
+        
+        await interaction.followup.send(embed=embed)
+        print(f"📊 {interaction.user} created logging channels in {guild.name}")
+        
+    except Exception as e:
+        await interaction.followup.send(f"❌ Failed to create logging channels: {e}", ephemeral=True)
+
 if __name__ == "__main__":
     TOKEN = os.getenv("DISCORD_TOKEN")
     if not TOKEN:
