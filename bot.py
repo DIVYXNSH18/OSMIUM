@@ -36,6 +36,8 @@ raid_tracker = defaultdict(lambda: deque(maxlen=10))
 nuke_tracker = defaultdict(lambda: {"bans": deque(maxlen=5), "kicks": deque(maxlen=5), "deletes": deque(maxlen=5)})
 # Whitelist
 whitelist = set()
+# Log channels storage
+log_channels = {}
 
 @bot.event
 async def on_ready():
@@ -68,6 +70,16 @@ async def on_message(message):
                     await message.channel.send(f"⚠️ {message.author.mention} Stop spamming!", delete_after=5)
                     await message.author.timeout(timedelta(minutes=5), reason="Spam detected")
                     print(f"🚨 Anti-Spam: Muted {message.author} for spamming")
+                    
+                    # Log to security channel
+                    if message.guild.id in log_channels and 'security' in log_channels[message.guild.id]:
+                        channel = bot.get_channel(log_channels[message.guild.id]['security'])
+                        if channel:
+                            embed = discord.Embed(title="🚨 Anti-Spam Triggered", color=0xED4245, timestamp=datetime.now())
+                            embed.add_field(name="User", value=f"{message.author.mention} ({message.author.id})", inline=False)
+                            embed.add_field(name="Channel", value=message.channel.mention, inline=True)
+                            embed.add_field(name="Action", value="Muted for 5 minutes", inline=True)
+                            await channel.send(embed=embed)
                 except:
                     pass
     
@@ -79,6 +91,17 @@ async def on_member_join(member):
     now = datetime.now()
     raid_tracker[member.guild.id].append(now)
     
+    # Log to join channel
+    if member.guild.id in log_channels and 'join' in log_channels[member.guild.id]:
+        channel = bot.get_channel(log_channels[member.guild.id]['join'])
+        if channel:
+            embed = discord.Embed(title="👋 Member Joined", color=0x57F287, timestamp=datetime.now())
+            embed.set_thumbnail(url=member.display_avatar.url)
+            embed.add_field(name="User", value=f"{member.mention} ({member.id})", inline=False)
+            embed.add_field(name="Account Created", value=f"<t:{int(member.created_at.timestamp())}:R>", inline=True)
+            embed.set_footer(text=f"Total Members: {member.guild.member_count}")
+            await channel.send(embed=embed)
+    
     # Check if raid (10 joins in 10 seconds)
     if len(raid_tracker[member.guild.id]) >= 10:
         time_diff = (raid_tracker[member.guild.id][-1] - raid_tracker[member.guild.id][0]).total_seconds()
@@ -86,8 +109,29 @@ async def on_member_join(member):
             try:
                 await member.kick(reason="Raid detected")
                 print(f"🚨 Anti-Raid: Kicked {member} - Raid detected")
+                
+                # Log to security channel
+                if member.guild.id in log_channels and 'security' in log_channels[member.guild.id]:
+                    channel = bot.get_channel(log_channels[member.guild.id]['security'])
+                    if channel:
+                        embed = discord.Embed(title="🚨 Anti-Raid Triggered", color=0xED4245, timestamp=datetime.now())
+                        embed.add_field(name="User Kicked", value=f"{member.mention} ({member.id})", inline=False)
+                        embed.add_field(name="Reason", value="Mass join detected (10+ joins in 10s)", inline=False)
+                        await channel.send(embed=embed)
             except:
                 pass
+
+@bot.event
+async def on_member_remove(member):
+    # Log to join channel
+    if member.guild.id in log_channels and 'join' in log_channels[member.guild.id]:
+        channel = bot.get_channel(log_channels[member.guild.id]['join'])
+        if channel:
+            embed = discord.Embed(title="👋 Member Left", color=0xED4245, timestamp=datetime.now())
+            embed.set_thumbnail(url=member.display_avatar.url)
+            embed.add_field(name="User", value=f"{member.mention} ({member.id})", inline=False)
+            embed.set_footer(text=f"Total Members: {member.guild.member_count}")
+            await channel.send(embed=embed)
 
 # ==================== ANTI-NUKE ====================
 @bot.event
@@ -134,6 +178,16 @@ async def ban(interaction: discord.Interaction, member: discord.Member, reason: 
         await member.ban(reason=reason)
         await interaction.response.send_message(f"✅ Banned {member.mention} | Reason: {reason}")
         print(f"🔨 {interaction.user} banned {member} - Reason: {reason}")
+        
+        # Log to mod channel
+        if interaction.guild.id in log_channels and 'mod' in log_channels[interaction.guild.id]:
+            channel = bot.get_channel(log_channels[interaction.guild.id]['mod'])
+            if channel:
+                embed = discord.Embed(title="🔨 Member Banned", color=0xED4245, timestamp=datetime.now())
+                embed.add_field(name="User", value=f"{member.mention} ({member.id})", inline=False)
+                embed.add_field(name="Moderator", value=interaction.user.mention, inline=True)
+                embed.add_field(name="Reason", value=reason, inline=True)
+                await channel.send(embed=embed)
     except Exception as e:
         await interaction.response.send_message(f"❌ Failed to ban: {e}", ephemeral=True)
 
@@ -148,6 +202,16 @@ async def kick(interaction: discord.Interaction, member: discord.Member, reason:
         await member.kick(reason=reason)
         await interaction.response.send_message(f"✅ Kicked {member.mention} | Reason: {reason}")
         print(f"👢 {interaction.user} kicked {member} - Reason: {reason}")
+        
+        # Log to mod channel
+        if interaction.guild.id in log_channels and 'mod' in log_channels[interaction.guild.id]:
+            channel = bot.get_channel(log_channels[interaction.guild.id]['mod'])
+            if channel:
+                embed = discord.Embed(title="👢 Member Kicked", color=0xFFA500, timestamp=datetime.now())
+                embed.add_field(name="User", value=f"{member.mention} ({member.id})", inline=False)
+                embed.add_field(name="Moderator", value=interaction.user.mention, inline=True)
+                embed.add_field(name="Reason", value=reason, inline=True)
+                await channel.send(embed=embed)
     except Exception as e:
         await interaction.response.send_message(f"❌ Failed to kick: {e}", ephemeral=True)
 
@@ -269,6 +333,14 @@ async def logging(interaction: discord.Interaction):
         join_logs = await guild.create_text_channel("join-logs", category=category, topic="Member join/leave log")
         message_logs = await guild.create_text_channel("message-logs", category=category, topic="Deleted/edited messages log")
         security_logs = await guild.create_text_channel("security-logs", category=category, topic="Anti-spam/raid/nuke alerts")
+        
+        # Store channel IDs
+        log_channels[guild.id] = {
+            'mod': mod_logs.id,
+            'join': join_logs.id,
+            'message': message_logs.id,
+            'security': security_logs.id
+        }
         
         embed = discord.Embed(
             title="✅ Logging Channels Created",
