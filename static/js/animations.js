@@ -26,78 +26,97 @@ function animateFollower() {
 animateFollower();
 */
 
-// Particle animation with canvas
-function createParticles() {
+// Animated Capsules Background
+function createAnimatedCapsules() {
     const particles = document.getElementById('particles');
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
     particles.appendChild(canvas);
     
-    const particlesArray = [];
-    const particleCount = 100;
-    
-    class Particle {
+    class Capsule {
         constructor() {
             this.x = Math.random() * canvas.width;
             this.y = Math.random() * canvas.height;
-            this.size = Math.random() * 2 + 1;
-            this.speedX = Math.random() * 0.5 - 0.25;
-            this.speedY = Math.random() * 0.5 - 0.25;
-            this.opacity = Math.random() * 0.5 + 0.2;
+            this.width = Math.random() * 80 + 60;
+            this.height = 25;
+            this.rotation = Math.random() * Math.PI * 2;
+            this.rotationSpeed = (Math.random() - 0.5) * 0.01;
+            this.speedX = (Math.random() - 0.5) * 0.5;
+            this.speedY = (Math.random() - 0.5) * 0.5;
+            this.opacity = Math.random() * 0.3 + 0.1;
+            this.color = this.getRandomColor();
+        }
+        
+        getRandomColor() {
+            const colors = [
+                'rgba(232, 154, 124, ',
+                'rgba(214, 123, 92, ',
+                'rgba(245, 184, 154, ',
+                'rgba(201, 106, 74, '
+            ];
+            return colors[Math.floor(Math.random() * colors.length)];
         }
         
         update() {
             this.x += this.speedX;
             this.y += this.speedY;
+            this.rotation += this.rotationSpeed;
             
-            if (this.x > canvas.width) this.x = 0;
-            if (this.x < 0) this.x = canvas.width;
-            if (this.y > canvas.height) this.y = 0;
-            if (this.y < 0) this.y = canvas.height;
+            if (this.x > canvas.width + this.width) this.x = -this.width;
+            if (this.x < -this.width) this.x = canvas.width + this.width;
+            if (this.y > canvas.height + this.height) this.y = -this.height;
+            if (this.y < -this.height) this.y = canvas.height + this.height;
         }
         
         draw() {
-            ctx.fillStyle = `rgba(232, 154, 124, ${this.opacity})`;
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.rotation);
+            
+            // Draw capsule outline
+            ctx.strokeStyle = this.color + this.opacity + ')';
+            ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-            ctx.fill();
+            
+            // Left semicircle
+            ctx.arc(-this.width/2 + this.height/2, 0, this.height/2, Math.PI/2, Math.PI * 1.5);
+            // Top line
+            ctx.lineTo(this.width/2 - this.height/2, -this.height/2);
+            // Right semicircle
+            ctx.arc(this.width/2 - this.height/2, 0, this.height/2, Math.PI * 1.5, Math.PI/2);
+            // Bottom line
+            ctx.lineTo(-this.width/2 + this.height/2, this.height/2);
+            
+            ctx.closePath();
+            ctx.stroke();
+            
+            ctx.restore();
         }
     }
     
-    for (let i = 0; i < particleCount; i++) {
-        particlesArray.push(new Particle());
+    const capsules = [];
+    for (let i = 0; i < 15; i++) {
+        capsules.push(new Capsule());
     }
     
-    function animateParticles() {
+    function animate() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        for (let i = 0; i < particlesArray.length; i++) {
-            particlesArray[i].update();
-            particlesArray[i].draw();
-            
-            for (let j = i + 1; j < particlesArray.length; j++) {
-                const dx = particlesArray[i].x - particlesArray[j].x;
-                const dy = particlesArray[i].y - particlesArray[j].y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                if (distance < 100) {
-                    ctx.strokeStyle = `rgba(232, 154, 124, ${0.2 * (1 - distance / 100)})`;
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    ctx.moveTo(particlesArray[i].x, particlesArray[i].y);
-                    ctx.lineTo(particlesArray[j].x, particlesArray[j].y);
-                    ctx.stroke();
-                }
-            }
-        }
+        capsules.forEach(capsule => {
+            capsule.update();
+            capsule.draw();
+        });
         
-        requestAnimationFrame(animateParticles);
+        requestAnimationFrame(animate);
     }
     
-    animateParticles();
+    animate();
     
     window.addEventListener('resize', () => {
         canvas.width = window.innerWidth;
@@ -136,7 +155,7 @@ const observer = new IntersectionObserver((entries) => {
 
 // Observe all cards
 document.addEventListener('DOMContentLoaded', () => {
-    createParticles();
+    createAnimatedCapsules();
     
     const cards = document.querySelectorAll('.feature-card, .command-card');
     cards.forEach((card, index) => {
