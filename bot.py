@@ -33,11 +33,15 @@ spam_tracker = defaultdict(lambda: deque(maxlen=5))
 # Anti-raid tracker
 raid_tracker = defaultdict(lambda: deque(maxlen=10))
 # Anti-nuke tracker
-nuke_tracker = defaultdict(lambda: {"bans": deque(maxlen=5), "kicks": deque(maxlen=5), "deletes": deque(maxlen=5)})
+nuke_tracker = defaultdict(lambda: {"bans": deque(maxlen=5), "kicks": deque(maxlen=5), "deletes": deque(maxlen=5), "roles": deque(maxlen=5)})
 # Whitelist
 whitelist = set()
 # Log channels storage
 log_channels = {}
+# Server lockdown status
+lockdown_status = {}
+# Minimum account age (days)
+MIN_ACCOUNT_AGE = 7
 
 @bot.event
 async def on_ready():
@@ -91,16 +95,41 @@ async def on_member_join(member):
     now = datetime.now()
     raid_tracker[member.guild.id].append(now)
     
+    # Check account age
+    account_age = (now - member.created_at.replace(tzinfo=None)).days
+    is_new_account = account_age < MIN_ACCOUNT_AGE
+    
     # Log to join channel
     if member.guild.id in log_channels and 'join' in log_channels[member.guild.id]:
         channel = bot.get_channel(log_channels[member.guild.id]['join'])
         if channel:
-            embed = discord.Embed(title="👋 Member Joined", color=0x57F287, timestamp=datetime.now())
+            embed = discord.Embed(
+                title="👋 Member Joined", 
+                color=0xED4245 if is_new_account else 0x57F287, 
+                timestamp=datetime.now()
+            )
             embed.set_thumbnail(url=member.display_avatar.url)
             embed.add_field(name="User", value=f"{member.mention} ({member.id})", inline=False)
-            embed.add_field(name="Account Created", value=f"<t:{int(member.created_at.timestamp())}:R>", inline=True)
+            embed.add_field(name="Account Age", value=f"{account_age} days", inline=True)
+            if is_new_account:
+                embed.add_field(name="⚠️ Warning", value="New account detected!", inline=True)
             embed.set_footer(text=f"Total Members: {member.guild.member_count}")
             await channel.send(embed=embed)
+    
+    # Auto-kick new accounts during raid
+    if is_new_account and len(raid_tracker[member.guild.id]) >= 5:
+        try:
+            await member.kick(reason="New account during raid")
+            if member.guild.id in log_channels and 'security' in log_channels[member.guild.id]:
+                channel = bot.get_channel(log_channels[member.guild.id]['security'])
+                if channel:
+                    embed = discord.Embed(title="🚨 Auto-Kick: New Account", color=0xED4245, timestamp=datetime.now())
+                    embed.add_field(name="User", value=f"{member.mention} ({member.id})", inline=False)
+                    embed.add_field(name="Reason", value=f"Account age: {account_age} days (min: {MIN_ACCOUNT_AGE})", inline=False)
+                    await channel.send(embed=embed)
+            return
+        except:
+            pass
     
     # Check if raid (10 joins in 10 seconds)
     if len(raid_tracker[member.guild.id]) >= 10:
@@ -373,6 +402,25 @@ async def logging(interaction: discord.Interaction):
     try:
         guild = interaction.guild
         
+        # Check if logging channels already exist
+        if guild.id in log_channels:
+            existing_channels = []
+            for channel_type, channel_id in log_channels[guild.id].items():
+                channel = bot.get_channel(channel_id)
+                if channel:
+                    existing_channels.append(f"{channel_type}: {channel.mention}")
+            
+            if existing_channels:
+                embed = discord.Embed(
+                    title="⚠️ Logging Channels Already Exist",
+                    description="Logging channels are already set up for this server.",
+                    color=0xFFA500
+                )
+                embed.add_field(name="Existing Channels", value="\n".join(existing_channels), inline=False)
+                embed.set_footer(text="Delete the channels manually if you want to recreate them")
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                return
+        
         # Create category for logs
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
@@ -424,3 +472,185 @@ if __name__ == "__main__":
     else:
         keep_alive()  # Start web server
         bot.run(TOKEN)
+
+
+# ==================== ROLE MONITORING ====================
+@bot.event
+async def on_guild_role_delete(role):
+    async for entry in role.guild.audit_logs(limit=1, action=discord.AuditLogAction.role_delete):
+        if entry.user.id not in whitelist:
+            now = datetime.now()
+            nuke_tracker[entry.user.id]["roles"].append(now)
+            
+            if len(nuke_tracker[entry.user.id]["roles"]) >= 3:
+                time_diff = (nuke_tracker[entry.user.id]["roles"][-1] - nuke_tracker[entry.user.id]["roles"][0]).total_seconds()
+                if time_diff < 10:
+                    try:
+                        await role.guild.ban(entry.user, reason="Anti-Nuke: Mass role deletion")
+                        
+                        if role.guild.id in log_channels and 'security' in log_channels[role.guild.id]:
+                            channel = bot.get_channel(log_channels[role.guild.id]['security'])
+                            if channel:
+                                embed = discord.Embed(title="🚨 NUKE ATTEMPT BLOCKED", color=0xED4245, timestamp=datetime.now())
+                                embed.add_field(name="Attacker", value=f"{entry.user.mention} ({entry.user.id})", inline=False)
+                                embed.add_field(name="Action", value="Mass role deletion detected", inline=False)
+                                embed.add_field(name="Response", value="User banned automatically", inline=False)
+                                await channel.send(embed=embed)
+                    except:
+                        pass
+
+@bot.event
+async def on_guild_role_update(before, after):
+    # Detect dangerous permission grants
+    dangerous_perms = ['administrator', 'manage_guild', 'manage_roles', 'manage_channels', 'ban_members', 'kick_members']
+    
+    before_perms = {perm: value for perm, value in before.permissions}
+    after_perms = {perm: value for perm, value in after.permissions}
+    
+    granted_perms = []
+    for perm in dangerous_perms:
+        if not before_perms.get(perm, False) and after_perms.get(perm, False):
+            granted_perms.append(perm)
+    
+    if granted_perms:
+        async for entry in after.guild.audit_logs(limit=1, action=discord.AuditLogAction.role_update):
+            if entry.user.id not in whitelist and after.guild.id in log_channels and 'security' in log_channels[after.guild.id]:
+                channel = bot.get_channel(log_channels[after.guild.id]['security'])
+                if channel:
+                    embed = discord.Embed(title="⚠️ Dangerous Permission Granted", color=0xFFA500, timestamp=datetime.now())
+                    embed.add_field(name="Role", value=after.mention, inline=False)
+                    embed.add_field(name="Modified By", value=entry.user.mention, inline=True)
+                    embed.add_field(name="Permissions Granted", value=", ".join(granted_perms), inline=False)
+                    await channel.send(embed=embed)
+
+# ==================== ADVANCED COMMANDS ====================
+@bot.tree.command(name="lockdown", description="Emergency server lockdown")
+async def lockdown(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ You need Administrator permission!", ephemeral=True)
+        return
+    
+    await interaction.response.defer()
+    
+    try:
+        guild = interaction.guild
+        lockdown_status[guild.id] = True
+        
+        # Lock all text channels
+        locked_count = 0
+        for channel in guild.text_channels:
+            try:
+                await channel.set_permissions(guild.default_role, send_messages=False)
+                locked_count += 1
+            except:
+                pass
+        
+        embed = discord.Embed(
+            title="🔒 SERVER LOCKDOWN ACTIVATED",
+            description=f"All channels have been locked. Only administrators can send messages.",
+            color=0xED4245,
+            timestamp=datetime.now()
+        )
+        embed.add_field(name="Locked Channels", value=str(locked_count), inline=True)
+        embed.add_field(name="Activated By", value=interaction.user.mention, inline=True)
+        
+        await interaction.followup.send(embed=embed)
+        
+        if guild.id in log_channels and 'security' in log_channels[guild.id]:
+            channel = bot.get_channel(log_channels[guild.id]['security'])
+            if channel:
+                await channel.send(embed=embed)
+        
+        print(f"🔒 {interaction.user} activated lockdown in {guild.name}")
+    except Exception as e:
+        await interaction.followup.send(f"❌ Failed to lockdown: {e}", ephemeral=True)
+
+@bot.tree.command(name="unlockdown", description="Remove server lockdown")
+async def unlockdown(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ You need Administrator permission!", ephemeral=True)
+        return
+    
+    await interaction.response.defer()
+    
+    try:
+        guild = interaction.guild
+        lockdown_status[guild.id] = False
+        
+        # Unlock all text channels
+        unlocked_count = 0
+        for channel in guild.text_channels:
+            try:
+                await channel.set_permissions(guild.default_role, send_messages=True)
+                unlocked_count += 1
+            except:
+                pass
+        
+        embed = discord.Embed(
+            title="🔓 SERVER LOCKDOWN DEACTIVATED",
+            description=f"All channels have been unlocked.",
+            color=0x57F287,
+            timestamp=datetime.now()
+        )
+        embed.add_field(name="Unlocked Channels", value=str(unlocked_count), inline=True)
+        embed.add_field(name="Deactivated By", value=interaction.user.mention, inline=True)
+        
+        await interaction.followup.send(embed=embed)
+        
+        if guild.id in log_channels and 'security' in log_channels[guild.id]:
+            channel = bot.get_channel(log_channels[guild.id]['security'])
+            if channel:
+                await channel.send(embed=embed)
+        
+        print(f"🔓 {interaction.user} deactivated lockdown in {guild.name}")
+    except Exception as e:
+        await interaction.followup.send(f"❌ Failed to unlock: {e}", ephemeral=True)
+
+@bot.tree.command(name="accountage", description="Set minimum account age requirement")
+@app_commands.describe(days="Minimum account age in days")
+async def accountage(interaction: discord.Interaction, days: int):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ You need Administrator permission!", ephemeral=True)
+        return
+    
+    global MIN_ACCOUNT_AGE
+    MIN_ACCOUNT_AGE = days
+    
+    await interaction.response.send_message(f"✅ Minimum account age set to **{days} days**\\nNew accounts will be auto-kicked during raids.", ephemeral=True)
+    print(f"⚙️ {interaction.user} set min account age to {days} days")
+
+@bot.tree.command(name="security", description="View security status and statistics")
+async def security(interaction: discord.Interaction):
+    guild = interaction.guild
+    
+    embed = discord.Embed(
+        title="🛡️ Security Status",
+        description=f"Security overview for **{guild.name}**",
+        color=0xE89A7C,
+        timestamp=datetime.now()
+    )
+    
+    # Lockdown status
+    is_locked = lockdown_status.get(guild.id, False)
+    embed.add_field(name="Lockdown", value="🔒 Active" if is_locked else "🔓 Inactive", inline=True)
+    
+    # Whitelist count
+    embed.add_field(name="Whitelisted Users", value=str(len(whitelist)), inline=True)
+    
+    # Account age requirement
+    embed.add_field(name="Min Account Age", value=f"{MIN_ACCOUNT_AGE} days", inline=True)
+    
+    # Logging status
+    has_logging = guild.id in log_channels
+    embed.add_field(name="Logging", value="✅ Enabled" if has_logging else "❌ Disabled", inline=True)
+    
+    # Recent activity
+    recent_spam = sum(1 for tracker in spam_tracker.values() if len(tracker) > 0)
+    embed.add_field(name="Active Spam Trackers", value=str(recent_spam), inline=True)
+    
+    recent_raids = len(raid_tracker.get(guild.id, []))
+    embed.add_field(name="Recent Joins", value=str(recent_raids), inline=True)
+    
+    embed.set_footer(text="Use /lockdown for emergency protection")
+    
+    await interaction.response.send_message(embed=embed)
