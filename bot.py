@@ -304,6 +304,64 @@ async def status(interaction: discord.Interaction):
     embed.add_field(name="Features", value="✅ Anti-Spam\n✅ Anti-Raid\n✅ Anti-Nuke\n✅ Moderation", inline=False)
     await interaction.response.send_message(embed=embed)
 
+@bot.tree.command(name="enableverification", description="Setup verification system")
+@app_commands.describe(channel="Channel to send verification message")
+async def enableverification(interaction: discord.Interaction, channel: discord.TextChannel):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ You need Administrator permission!", ephemeral=True)
+        return
+    
+    # Create verified role if it doesn't exist
+    verified_role = discord.utils.get(interaction.guild.roles, name="Verified")
+    if not verified_role:
+        verified_role = await interaction.guild.create_role(
+            name="Verified",
+            color=discord.Color.green(),
+            reason="Verification system"
+        )
+    
+    # Create verification embed
+    embed = discord.Embed(
+        title="Server Verification",
+        description="This server requires you to verify yourself to get access to other channels. You can simply verify by clicking on the verify button.",
+        color=0x5865F2
+    )
+    embed.set_image(url="https://i.imgur.com/verification_banner.png")  # You can replace with custom image
+    
+    # Create verify button
+    class VerifyButton(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=None)
+        
+        @discord.ui.button(label="Verify", style=discord.ButtonStyle.primary, custom_id="verify_button", emoji="✅")
+        async def verify(self, interaction: discord.Interaction, button: discord.ui.Button):
+            member = interaction.user
+            verified_role = discord.utils.get(interaction.guild.roles, name="Verified")
+            
+            if verified_role in member.roles:
+                await interaction.response.send_message("✅ You are already verified!", ephemeral=True)
+                return
+            
+            try:
+                await member.add_roles(verified_role)
+                await interaction.response.send_message("✅ You have been verified! Welcome to the server!", ephemeral=True)
+                
+                # Log to mod channel
+                if interaction.guild.id in log_channels and 'join' in log_channels[interaction.guild.id]:
+                    log_channel = bot.get_channel(log_channels[interaction.guild.id]['join'])
+                    if log_channel:
+                        log_embed = discord.Embed(title="✅ Member Verified", color=0x57F287, timestamp=datetime.now())
+                        log_embed.add_field(name="User", value=f"{member.mention} ({member.id})", inline=False)
+                        await log_channel.send(embed=log_embed)
+            except Exception as e:
+                await interaction.response.send_message(f"❌ Failed to verify: {e}", ephemeral=True)
+    
+    # Send verification message
+    await channel.send(embed=embed, view=VerifyButton())
+    await interaction.response.send_message(f"✅ Verification system enabled in {channel.mention}\n\n**Setup Instructions:**\n1. Remove view permissions from @everyone for other channels\n2. Give view permissions to {verified_role.mention} for other channels\n3. Members will get the role after clicking Verify", ephemeral=True)
+    
+    print(f"✅ {interaction.user} enabled verification in {interaction.guild.name}")
+
 @bot.tree.command(name="logging", description="Setup logging channels")
 async def logging(interaction: discord.Interaction):
     if not interaction.user.guild_permissions.administrator:
