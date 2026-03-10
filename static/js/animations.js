@@ -26,7 +26,7 @@ function animateFollower() {
 animateFollower();
 */
 
-// Animated Capsules Background
+// Premium Animated Background
 function createAnimatedCapsules() {
     const particles = document.getElementById('particles');
     const canvas = document.createElement('canvas');
@@ -39,37 +39,98 @@ function createAnimatedCapsules() {
     canvas.style.left = '0';
     particles.appendChild(canvas);
     
-    class Capsule {
+    // Floating orbs with glow
+    class Orb {
         constructor() {
             this.x = Math.random() * canvas.width;
             this.y = Math.random() * canvas.height;
-            this.width = Math.random() * 80 + 60;
-            this.height = 25;
-            this.rotation = Math.random() * Math.PI / 4 - Math.PI / 8; // Slight angle variation
-            this.speedX = 0.3 + Math.random() * 0.2; // Move right
-            this.speedY = 0.1 + Math.random() * 0.1; // Slight downward drift
-            this.opacity = Math.random() * 0.4 + 0.2;
-            this.colorIndex = Math.floor(Math.random() * 4);
-        }
-        
-        getGradient() {
-            const gradients = [
-                ['#E89A7C', '#D67B5C'],
-                ['#F5B89A', '#E89A7C'],
-                ['#D67B5C', '#C96A4A'],
-                ['#E89A7C', '#F5B89A']
-            ];
-            return gradients[this.colorIndex];
+            this.radius = Math.random() * 3 + 2;
+            this.speedX = (Math.random() - 0.5) * 0.5;
+            this.speedY = (Math.random() - 0.5) * 0.5;
+            this.hue = Math.random() * 30 + 10; // Orange/coral hues
         }
         
         update() {
             this.x += this.speedX;
             this.y += this.speedY;
-            this.rotation += 0.001;
             
-            // Wrap around screen
-            if (this.x > canvas.width + this.width) this.x = -this.width;
-            if (this.y > canvas.height + this.height) this.y = -this.height;
+            if (this.x < 0 || this.x > canvas.width) this.speedX *= -1;
+            if (this.y < 0 || this.y > canvas.height) this.speedY *= -1;
+        }
+        
+        draw() {
+            // Glow effect
+            const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius * 3);
+            gradient.addColorStop(0, `hsla(${this.hue}, 80%, 65%, 0.8)`);
+            gradient.addColorStop(0.5, `hsla(${this.hue}, 80%, 65%, 0.3)`);
+            gradient.addColorStop(1, `hsla(${this.hue}, 80%, 65%, 0)`);
+            
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius * 3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Core
+            ctx.fillStyle = `hsla(${this.hue}, 90%, 70%, 0.9)`;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    
+    // Flowing waves
+    class Wave {
+        constructor(y, speed, amplitude, frequency) {
+            this.y = y;
+            this.speed = speed;
+            this.amplitude = amplitude;
+            this.frequency = frequency;
+            this.offset = Math.random() * Math.PI * 2;
+        }
+        
+        draw(time) {
+            ctx.beginPath();
+            ctx.moveTo(0, this.y);
+            
+            for (let x = 0; x <= canvas.width; x += 5) {
+                const y = this.y + Math.sin((x * this.frequency) + (time * this.speed) + this.offset) * this.amplitude;
+                ctx.lineTo(x, y);
+            }
+            
+            const gradient = ctx.createLinearGradient(0, this.y - this.amplitude, 0, this.y + this.amplitude);
+            gradient.addColorStop(0, 'rgba(232, 154, 124, 0)');
+            gradient.addColorStop(0.5, 'rgba(232, 154, 124, 0.1)');
+            gradient.addColorStop(1, 'rgba(232, 154, 124, 0)');
+            
+            ctx.strokeStyle = gradient;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+    }
+    
+    // Geometric shapes
+    class GeometricShape {
+        constructor() {
+            this.x = Math.random() * canvas.width;
+            this.y = Math.random() * canvas.height;
+            this.size = Math.random() * 60 + 40;
+            this.rotation = Math.random() * Math.PI * 2;
+            this.rotationSpeed = (Math.random() - 0.5) * 0.02;
+            this.speedX = (Math.random() - 0.5) * 0.3;
+            this.speedY = (Math.random() - 0.5) * 0.3;
+            this.type = Math.floor(Math.random() * 3); // 0: hexagon, 1: triangle, 2: diamond
+            this.opacity = Math.random() * 0.15 + 0.05;
+        }
+        
+        update() {
+            this.x += this.speedX;
+            this.y += this.speedY;
+            this.rotation += this.rotationSpeed;
+            
+            if (this.x < -this.size) this.x = canvas.width + this.size;
+            if (this.x > canvas.width + this.size) this.x = -this.size;
+            if (this.y < -this.size) this.y = canvas.height + this.size;
+            if (this.y > canvas.height + this.size) this.y = -this.size;
         }
         
         draw() {
@@ -77,49 +138,109 @@ function createAnimatedCapsules() {
             ctx.translate(this.x, this.y);
             ctx.rotate(this.rotation);
             
-            // Create gradient
-            const gradient = ctx.createLinearGradient(-this.width/2, 0, this.width/2, 0);
-            const colors = this.getGradient();
-            gradient.addColorStop(0, colors[0] + Math.floor(this.opacity * 255).toString(16).padStart(2, '0'));
-            gradient.addColorStop(1, colors[1] + Math.floor(this.opacity * 255).toString(16).padStart(2, '0'));
+            // Gradient fill
+            const gradient = ctx.createLinearGradient(-this.size/2, -this.size/2, this.size/2, this.size/2);
+            gradient.addColorStop(0, `rgba(232, 154, 124, ${this.opacity})`);
+            gradient.addColorStop(1, `rgba(214, 123, 92, ${this.opacity * 0.5})`);
             
-            // Draw capsule with gradient fill
             ctx.fillStyle = gradient;
+            ctx.strokeStyle = `rgba(232, 154, 124, ${this.opacity * 2})`;
+            ctx.lineWidth = 1;
+            
             ctx.beginPath();
             
-            // Left semicircle
-            ctx.arc(-this.width/2 + this.height/2, 0, this.height/2, Math.PI/2, Math.PI * 1.5);
-            // Top line
-            ctx.lineTo(this.width/2 - this.height/2, -this.height/2);
-            // Right semicircle
-            ctx.arc(this.width/2 - this.height/2, 0, this.height/2, Math.PI * 1.5, Math.PI/2);
-            // Bottom line
-            ctx.lineTo(-this.width/2 + this.height/2, this.height/2);
+            if (this.type === 0) {
+                // Hexagon
+                for (let i = 0; i < 6; i++) {
+                    const angle = (Math.PI / 3) * i;
+                    const x = Math.cos(angle) * this.size / 2;
+                    const y = Math.sin(angle) * this.size / 2;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+            } else if (this.type === 1) {
+                // Triangle
+                for (let i = 0; i < 3; i++) {
+                    const angle = (Math.PI * 2 / 3) * i - Math.PI / 2;
+                    const x = Math.cos(angle) * this.size / 2;
+                    const y = Math.sin(angle) * this.size / 2;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+            } else {
+                // Diamond
+                ctx.moveTo(0, -this.size / 2);
+                ctx.lineTo(this.size / 2, 0);
+                ctx.lineTo(0, this.size / 2);
+                ctx.lineTo(-this.size / 2, 0);
+            }
             
             ctx.closePath();
             ctx.fill();
-            
-            // Add subtle outline
-            ctx.strokeStyle = colors[1] + Math.floor(this.opacity * 0.5 * 255).toString(16).padStart(2, '0');
-            ctx.lineWidth = 1;
             ctx.stroke();
             
             ctx.restore();
         }
     }
     
-    const capsules = [];
-    for (let i = 0; i < 20; i++) {
-        capsules.push(new Capsule());
+    // Create elements
+    const orbs = [];
+    for (let i = 0; i < 30; i++) {
+        orbs.push(new Orb());
     }
     
+    const waves = [
+        new Wave(canvas.height * 0.3, 0.001, 30, 0.005),
+        new Wave(canvas.height * 0.5, 0.0015, 40, 0.003),
+        new Wave(canvas.height * 0.7, 0.002, 25, 0.007)
+    ];
+    
+    const shapes = [];
+    for (let i = 0; i < 8; i++) {
+        shapes.push(new GeometricShape());
+    }
+    
+    let time = 0;
+    
     function animate() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Fade effect for trails
+        ctx.fillStyle = 'rgba(10, 10, 15, 0.1)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        capsules.forEach(capsule => {
-            capsule.update();
-            capsule.draw();
+        time += 0.01;
+        
+        // Draw waves
+        waves.forEach(wave => wave.draw(time));
+        
+        // Draw and update shapes
+        shapes.forEach(shape => {
+            shape.update();
+            shape.draw();
         });
+        
+        // Draw and update orbs
+        orbs.forEach(orb => {
+            orb.update();
+            orb.draw();
+        });
+        
+        // Connect nearby orbs
+        for (let i = 0; i < orbs.length; i++) {
+            for (let j = i + 1; j < orbs.length; j++) {
+                const dx = orbs[i].x - orbs[j].x;
+                const dy = orbs[i].y - orbs[j].y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < 150) {
+                    ctx.strokeStyle = `rgba(232, 154, 124, ${0.2 * (1 - distance / 150)})`;
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(orbs[i].x, orbs[i].y);
+                    ctx.lineTo(orbs[j].x, orbs[j].y);
+                    ctx.stroke();
+                }
+            }
+        }
         
         requestAnimationFrame(animate);
     }
