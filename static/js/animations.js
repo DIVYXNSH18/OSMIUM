@@ -45,33 +45,31 @@ function createAnimatedCapsules() {
             this.y = Math.random() * canvas.height;
             this.width = Math.random() * 80 + 60;
             this.height = 25;
-            this.rotation = Math.random() * Math.PI * 2;
-            this.rotationSpeed = (Math.random() - 0.5) * 0.01;
-            this.speedX = (Math.random() - 0.5) * 0.5;
-            this.speedY = (Math.random() - 0.5) * 0.5;
-            this.opacity = Math.random() * 0.3 + 0.1;
-            this.color = this.getRandomColor();
+            this.rotation = Math.random() * Math.PI / 4 - Math.PI / 8; // Slight angle variation
+            this.speedX = 0.3 + Math.random() * 0.2; // Move right
+            this.speedY = 0.1 + Math.random() * 0.1; // Slight downward drift
+            this.opacity = Math.random() * 0.4 + 0.2;
+            this.colorIndex = Math.floor(Math.random() * 4);
         }
         
-        getRandomColor() {
-            const colors = [
-                'rgba(232, 154, 124, ',
-                'rgba(214, 123, 92, ',
-                'rgba(245, 184, 154, ',
-                'rgba(201, 106, 74, '
+        getGradient() {
+            const gradients = [
+                ['#E89A7C', '#D67B5C'],
+                ['#F5B89A', '#E89A7C'],
+                ['#D67B5C', '#C96A4A'],
+                ['#E89A7C', '#F5B89A']
             ];
-            return colors[Math.floor(Math.random() * colors.length)];
+            return gradients[this.colorIndex];
         }
         
         update() {
             this.x += this.speedX;
             this.y += this.speedY;
-            this.rotation += this.rotationSpeed;
+            this.rotation += 0.001;
             
+            // Wrap around screen
             if (this.x > canvas.width + this.width) this.x = -this.width;
-            if (this.x < -this.width) this.x = canvas.width + this.width;
             if (this.y > canvas.height + this.height) this.y = -this.height;
-            if (this.y < -this.height) this.y = canvas.height + this.height;
         }
         
         draw() {
@@ -79,9 +77,14 @@ function createAnimatedCapsules() {
             ctx.translate(this.x, this.y);
             ctx.rotate(this.rotation);
             
-            // Draw capsule outline
-            ctx.strokeStyle = this.color + this.opacity + ')';
-            ctx.lineWidth = 2;
+            // Create gradient
+            const gradient = ctx.createLinearGradient(-this.width/2, 0, this.width/2, 0);
+            const colors = this.getGradient();
+            gradient.addColorStop(0, colors[0] + Math.floor(this.opacity * 255).toString(16).padStart(2, '0'));
+            gradient.addColorStop(1, colors[1] + Math.floor(this.opacity * 255).toString(16).padStart(2, '0'));
+            
+            // Draw capsule with gradient fill
+            ctx.fillStyle = gradient;
             ctx.beginPath();
             
             // Left semicircle
@@ -94,6 +97,11 @@ function createAnimatedCapsules() {
             ctx.lineTo(-this.width/2 + this.height/2, this.height/2);
             
             ctx.closePath();
+            ctx.fill();
+            
+            // Add subtle outline
+            ctx.strokeStyle = colors[1] + Math.floor(this.opacity * 0.5 * 255).toString(16).padStart(2, '0');
+            ctx.lineWidth = 1;
             ctx.stroke();
             
             ctx.restore();
@@ -101,7 +109,7 @@ function createAnimatedCapsules() {
     }
     
     const capsules = [];
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 20; i++) {
         capsules.push(new Capsule());
     }
     
